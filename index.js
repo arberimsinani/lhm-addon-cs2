@@ -78,41 +78,86 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
      * In this case, we store information on who was the MVP of every round, and then dump it to a file
      */
 
-    CSGOGSI.on("mvp", (player) => {
-        const current = CSGOGSI.current;
-        if(!current) return;
+    // CSGOGSI.on("mvp", (player) => {
+    //     const current = CSGOGSI.current;
+    //     if(!current) return;
 
-        rounds.push({
-            player: player.name,
-            steamid: player.steamid,
-            round: current.round?.phase === "over" ? current.map.round : current.map.round + 1
-        });
+    //     rounds.push({
+    //         player: player.name,
+    //         steamid: player.steamid,
+    //         round: current.round?.phase === "over" ? current.map.round : current.map.round + 1
+    //     });
 
-        fs.writeFileSync(path.join(__dirname, "./mvps.json"), generateTable(), 'utf-8');
-        /**
-         * Example content of the file (saved to %appdata%/hud-manager/addons/lhmaddonexample/mvps.json):
-         * 
-         * 
-         *  Round   |   Player
-            -----------------------
-            1       | 0shi
-            2       | Nurek
-            3       | Squezzer 
-            4       | KorpOszten (Very good player)
-            5       | BuenosDias
-            6       | KorpOszten (Very good player)
-            7       | xynd
-            8       | naruto
-            8       | Nurek
-            9       | KorpOszten (Very good player)
-            10      | naruto
+    //     fs.writeFileSync(path.join(__dirname, "./mvps.json"), generateTable(), 'utf-8');
+    // });
 
-         */
+    // ✅ Listen for raw MIRV messages
+    window.addEventListener("message", (event) => {
+        const data = event.data;
+
+        if (data?.event?.name === "player_death") {
+            const kill = CSGOGSI.digestMIRV(data, "player_death");
+            if (!kill || !kill.victim) return;
+
+            console.log("Kill:", kill);
+
+            fetch("http://localhost:8085/player/death", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    victim: kill.victim.name,
+                    steamid: kill.victim.steamid,
+                    weapon: kill.weapon,
+                    killer: kill.killer?.name || null,
+                    headshot: kill.headshot,
+                    timestamp: Date.now()
+                })
+            }).catch(console.error);
+        }
+
+        if (data?.event?.name === "player_hurt") {
+            const hurt = CSGOGSI.digestMIRV(data, "player_hurt");
+            if (hurt) {
+                console.log("Hurt:", hurt);
+                // You could POST this to a /player/hurt endpoint if needed
+            }
+        }
     });
 
     CSGOGSI.on("bombExplode", () => {
-        // Fetch example
-        // fetch('https://some.api.endpoint/bomb', { method: "POST" })
+        fetch('http://localhost:8085/bomb/exploded', { method: "POST" });
+    });
+
+    CSGOGSI.on("bombPlant", () => {
+        fetch('http://localhost:8085/bomb/planted', { method: "POST" });
+    });
+
+    CSGOGSI.on("bombPlantStart", () => {
+        fetch('http://localhost:8085/bomb/planting', { method: "POST" });
+    });
+
+    CSGOGSI.on("defuseStart", () => {
+        fetch('http://localhost:8085/bomb/defusing', { method: "POST" });
+    });
+
+    CSGOGSI.on("roundEnd", () => {
+        const winner_side = CSGOGSI.current?.round?.win_team;
+        const winner_name = winner_side === 'CT'
+            ? CSGOGSI?.current?.map?.team_ct?.name
+            : CSGOGSI?.current?.map?.team_t?.name;
+
+        console.log("Winner name: ", { winner_name });
+
+        fetch('http://localhost:8085/round/end', {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                map: CSGOGSI.current?.map,
+                round: CSGOGSI.current?.round,
+                bomb: CSGOGSI.current?.bomb,
+                timestamp: Date.now()
+            })
+        });
     });
 });
 
