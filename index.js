@@ -8,9 +8,14 @@ const path = require('path');
 loadConfig(async () => {
     const config = [
         {
-            name: "targetPlayer",
-            type: "player",
-            label: "Target player for info dump"
+            name: "leftTeam",
+            type: "team",
+            label: "Select Left Team"
+        },
+        {
+            name: "rightTeam",
+            type: "team",
+            label: "Select Right Team"
         },
         {
             name: "buttonAction",
@@ -40,19 +45,54 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
 
 
     onAction("buttonAction", data => {
-        console.log("Data from action button:", {data});
-    })
+        const players = CSGOGSI.current?.players;
+
+        if (!players || players.length === 0) {
+            console.log("No players available.");
+            return;
+        }
+
+        const outputPath = path.join(__dirname, "players_dump.json");
+        try {
+            fs.writeFileSync(outputPath, JSON.stringify(players, null, 2), 'utf-8');
+            console.log(`Players written to ${outputPath}`);
+        } catch (err) {
+            console.error("Failed to write players file:", err);
+        }
+    });
 
     /**
      * Accessing inital config
      */
     let targetPlayerSteamId = config?.targetPlayer?.player?.steamid;
+    let leftTeamName = config?.leftTeam?.team?.name;
+    let rightTeamName = config?.rightTeam?.team?.name;
 
+
+    console.log("Left team name ", leftTeamName)
     /**
      * You can listen for changes in config while addon is running
      */
     onConfigChange(newConfig => {
-        targetPlayerSteamId = newConfig?.targetPlayer?.player?.steamid;
+        const leftTeamName = newConfig?.leftTeam?.team?.name;
+        const rightTeamName = newConfig?.rightTeam?.team?.name;
+
+        const body = {
+            left: {
+                name: leftTeamName,
+                players: [] // Add actual player data here if needed
+            },
+            right: {
+                name: rightTeamName,
+                players: [] // Add actual player data here if needed
+            }
+        };
+
+        fetch("http://localhost:8085/team/update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        }).catch(console.error);
     });
 
     const generateTable = () => {
@@ -91,37 +131,23 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
     //     fs.writeFileSync(path.join(__dirname, "./mvps.json"), generateTable(), 'utf-8');
     // });
 
-    // ✅ Listen for raw MIRV messages
-    window.addEventListener("message", (event) => {
-        const data = event.data;
 
-        if (data?.event?.name === "player_death") {
-            const kill = CSGOGSI.digestMIRV(data, "player_death");
-            if (!kill || !kill.victim) return;
+    CSGOGSI.on("kill", (kill) => {
+        if (!kill || !kill.victim) return;
 
-            console.log("Kill:", kill);
+        console.log("Kill event received:", kill);
 
-            fetch("http://localhost:8085/player/death", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    victim: kill.victim.name,
-                    steamid: kill.victim.steamid,
-                    weapon: kill.weapon,
-                    killer: kill.killer?.name || null,
-                    headshot: kill.headshot,
-                    timestamp: Date.now()
-                })
-            }).catch(console.error);
-        }
+        const body = {
+            name: kill.victim?.name || null,
+            steamid: kill.victim?.steamid,
+            timestamp: Date.now()
+        };
 
-        if (data?.event?.name === "player_hurt") {
-            const hurt = CSGOGSI.digestMIRV(data, "player_hurt");
-            if (hurt) {
-                console.log("Hurt:", hurt);
-                // You could POST this to a /player/hurt endpoint if needed
-            }
-        }
+        fetch("http://localhost:8085/player/death", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        }).catch(console.error);
     });
 
     CSGOGSI.on("bombExplode", () => {
