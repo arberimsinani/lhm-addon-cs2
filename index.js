@@ -131,6 +131,9 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
     //     fs.writeFileSync(path.join(__dirname, "./mvps.json"), generateTable(), 'utf-8');
     // });
 
+    CSGOGSI.on("freezetimeStart", () => {
+        fetch('http://localhost:8085/round/start', { method: "POST" });
+    });
 
     CSGOGSI.on("kill", (kill) => {
         if (!kill || !kill.victim) return;
@@ -150,20 +153,8 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
         }).catch(console.error);
     });
 
-    CSGOGSI.on("bombExplode", () => {
-        fetch('http://localhost:8085/bomb/exploded', { method: "POST" });
-    });
-
     CSGOGSI.on("bombPlant", () => {
         fetch('http://localhost:8085/bomb/planted', { method: "POST" });
-    });
-
-    CSGOGSI.on("bombPlantStart", () => {
-        fetch('http://localhost:8085/bomb/planting', { method: "POST" });
-    });
-
-    CSGOGSI.on("defuseStart", () => {
-        fetch('http://localhost:8085/bomb/defusing', { method: "POST" });
     });
 
     CSGOGSI.on("roundEnd", () => {
