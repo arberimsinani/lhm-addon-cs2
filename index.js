@@ -45,20 +45,21 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
 
 
     onAction("buttonAction", data => {
-        const players = CSGOGSI.current?.players;
+        console.log(CSGOGSI.current?.round.phase)
+        // const players = CSGOGSI.current?.players;
 
-        if (!players || players.length === 0) {
-            console.log("No players available.");
-            return;
-        }
+        // if (!players || players.length === 0) {
+        //     console.log("No players available.");
+        //     return;
+        // }
 
-        const outputPath = path.join(__dirname, "players_dump.json");
-        try {
-            fs.writeFileSync(outputPath, JSON.stringify(players, null, 2), 'utf-8');
-            console.log(`Players written to ${outputPath}`);
-        } catch (err) {
-            console.error("Failed to write players file:", err);
-        }
+        // const outputPath = path.join(__dirname, "players_dump.json");
+        // try {
+        //     fs.writeFileSync(outputPath, JSON.stringify(players, null, 2), 'utf-8');
+        //     console.log(`Players written to ${outputPath}`);
+        // } catch (err) {
+        //     console.error("Failed to write players file:", err);
+        // }
     });
 
     /**
@@ -135,6 +136,10 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
         fetch('http://localhost:8085/round/start', { method: "POST" });
     });
 
+    CSGOGSI.on("warmupStart", (data)=>{
+        console.log("Warmup start");
+    });
+
     CSGOGSI.on("kill", (kill) => {
         if (!kill || !kill.victim) return;
 
@@ -158,15 +163,21 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
     });
 
     CSGOGSI.on("roundEnd", () => {
-        const winner_side = CSGOGSI.current?.round?.win_team;
-        const winner_name = winner_side === 'CT'
-            ? CSGOGSI?.current?.map?.team_ct?.name
-            : CSGOGSI?.current?.map?.team_t?.name;
-
-        console.log("Winner name: ", { winner_name });
-
         fetch('http://localhost:8085/round/end', {
             method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                map: CSGOGSI.current?.map,
+                round: CSGOGSI.current?.round,
+                bomb: CSGOGSI.current?.bomb,
+                timestamp: Date.now()
+            })
+        });
+    });
+
+    CSGOGSI.on("matchEnd", () => {
+        fetch('http://localhost:8085/match/end', {
+             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 map: CSGOGSI.current?.map,
