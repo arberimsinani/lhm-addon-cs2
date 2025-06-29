@@ -45,7 +45,7 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
 
 
     onAction("buttonAction", data => {
-        console.log(CSGOGSI.current?.round.phase)
+        console.log(CSGOGSI.current)
         // const players = CSGOGSI.current?.players;
 
         // if (!players || players.length === 0) {
@@ -69,8 +69,10 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
     let leftTeamName = config?.leftTeam?.team?.name;
     let rightTeamName = config?.rightTeam?.team?.name;
 
+    let freezetimeSent = false
+    let last_round_phase = "undefined"
 
-    console.log("Left team name ", leftTeamName)
+    // console.log("Left team name ", leftTeamName)
     /**
      * You can listen for changes in config while addon is running
      */
@@ -136,14 +138,18 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
         fetch('http://localhost:8085/round/start', { method: "POST" });
     });
 
-    CSGOGSI.on("warmupStart", (data)=>{
+    CSGOGSI.on("warmupStart", ()=>{
         console.log("Warmup start");
+    });
+
+    CSGOGSI.on("timeoutStart", () => {
+        console.log("TimeoutStart");
     });
 
     CSGOGSI.on("kill", (kill) => {
         if (!kill || !kill.victim) return;
 
-        console.log("Kill event received:", kill);
+        // console.log("Kill event received:", kill);
 
         const body = {
             name: kill.victim?.name || null,
@@ -162,7 +168,16 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
         fetch('http://localhost:8085/bomb/planted', { method: "POST" });
     });
 
+    CSGOGSI.on("bombExplode", () => {
+        fetch('http://localhost:8085/bomb/exploded', { method: "POST" });
+    });
+
+    CSGOGSI.on("bombDefuse", () => {
+        fetch('http://localhost:8085/bomb/defused', { method: "POST" });
+    });
+
     CSGOGSI.on("roundEnd", () => {
+        console.log(CSGOGSI.current?.bomb)
         fetch('http://localhost:8085/round/end', {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -173,6 +188,7 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
                 timestamp: Date.now()
             })
         });
+        freezetimeSent = false;
     });
 
     CSGOGSI.on("matchEnd", () => {
@@ -186,6 +202,15 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
                 timestamp: Date.now()
             })
         });
+    });
+
+    CSGOGSI.on("data" ,()=>{
+        round_phase = CSGOGSI.current?.round?.phase
+        if (round_phase == "freezetime" && round_phase != last_round_phase) {
+            fetch('http://localhost:8085/round/start', { method: "POST" });
+            console.log("send Freezetime");
+        }
+        last_round_phase = round_phase
     });
 });
 
