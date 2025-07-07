@@ -1,4 +1,6 @@
 /// <reference path="./types/index.d.ts" />
+const { CSGOGSI } = require('csgogsi');
+const { DOTA2GSI } = require('dotagsi');
 const fs = require('fs');
 const path = require('path');
 /**
@@ -16,6 +18,11 @@ loadConfig(async () => {
             name: "rightTeam",
             type: "team",
             label: "Select Right Team"
+        },
+        {
+            name: "womenTeams",
+            type: "checkbox",
+            label: "Women Teams"
         },
         {
             name: "buttonAction",
@@ -40,12 +47,13 @@ loadConfig(async () => {
  * onConfigChange: listens for change in the config
  * CSGOGSI: GSI Event Listener Instance
  */
-onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
+onStart(async ({ CSGOGSI, DOTAGSI, config, close, onConfigChange, onAction }) => {
     const rounds = [];
 
 
     onAction("buttonAction", data => {
         console.log(CSGOGSI.current)
+        console.log(DOTAGSI.last)
         // const players = CSGOGSI.current?.players;
 
         // if (!players || players.length === 0) {
@@ -66,8 +74,9 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
      * Accessing inital config
      */
     let targetPlayerSteamId = config?.targetPlayer?.player?.steamid;
-    let leftTeamName = config?.leftTeam?.team?.name;
-    let rightTeamName = config?.rightTeam?.team?.name;
+    // let leftTeamName = config?.leftTeam?.team?.name;
+    // let rightTeamName = config?.rightTeam?.team?.name;
+    // let womenTeams = config?.womenTeams;
 
     let freezetimeSent = false
     let last_round_phase = "undefined"
@@ -79,8 +88,9 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
     onConfigChange(newConfig => {
         const leftTeamName = newConfig?.leftTeam?.team?.name;
         const rightTeamName = newConfig?.rightTeam?.team?.name;
-
+        const womenTeams = newConfig?.womenTeams
         const body = {
+            women_teams: womenTeams,
             left: {
                 name: leftTeamName,
                 players: [] // Add actual player data here if needed
@@ -90,7 +100,7 @@ onStart(async ({ CSGOGSI, config, close, onConfigChange, onAction }) => {
                 players: [] // Add actual player data here if needed
             }
         };
-
+        console.log(womenTeams)
         fetch("http://localhost:8085/team/update", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
