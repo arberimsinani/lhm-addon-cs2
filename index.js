@@ -246,6 +246,42 @@ onStart(async ({ CSGOGSI, DOTAGSI, config, close, onConfigChange, onAction }) =>
             }
         })
     });
+
+    DOTAGSI.on("kill", kill => {
+        if (!kill || !kill.victim) return
+
+        const body = {
+            killer_name: kill.killer?.name || null,
+            killer_steamid: kill.killer?.steamid,
+            victim_name: kill.victim?.name || null,
+            victim_steamid: kill.victim?.steamid,
+            timestamp: Date.now()
+        }
+
+        fetch("http://localhost:8085/player/death", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        }).catch(console.error)
+    })
+
+    DOTAGSI.on("data", dota => {
+        const events = dota.events || []
+        events.forEach(event => {
+            if (event.event_type === "roshan_killed") {
+                const body = {
+                    team: event.killed_by_team,
+                    killer_player_id: event.killer_player_id,
+                    timestamp: Date.now()
+                }
+                fetch("http://localhost:8085/roshan/killed", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                }).catch(console.error)
+            }
+        })
+    });
 });
 
 /**
