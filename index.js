@@ -80,6 +80,7 @@ onStart(async ({ CSGOGSI, DOTAGSI, config, close, onConfigChange, onAction }) =>
 
     let freezetimeSent = false
     let last_round_phase = "undefined"
+    const flashedPlayers = {}
 
     // console.log("Left team name ", leftTeamName)
     /**
@@ -214,13 +215,36 @@ onStart(async ({ CSGOGSI, DOTAGSI, config, close, onConfigChange, onAction }) =>
         });
     });
 
-    CSGOGSI.on("data" ,()=>{
-        round_phase = CSGOGSI.current?.round?.phase
+    CSGOGSI.on("data", () => {
+        const round_phase = CSGOGSI.current?.round?.phase
         if (round_phase == "freezetime" && round_phase != last_round_phase) {
             fetch('http://localhost:8085/round/start', { method: "POST" });
             console.log("send Freezetime");
         }
         last_round_phase = round_phase
+
+        const players = CSGOGSI.current?.players || []
+        players.forEach(player => {
+            const steamid = player.steamid
+            if (!steamid) return
+            const isFlashed = player.state?.flashed > 0
+            const wasFlashed = flashedPlayers[steamid] || false
+            if (isFlashed && !wasFlashed) {
+                flashedPlayers[steamid] = true
+                const body = {
+                    name: player.name,
+                    steamid: player.steamid,
+                    timestamp: Date.now()
+                }
+                fetch("http://localhost:8085/player/flashed", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                }).catch(console.error)
+            } else if (!isFlashed && wasFlashed) {
+                flashedPlayers[steamid] = false
+            }
+        })
     });
 });
 
