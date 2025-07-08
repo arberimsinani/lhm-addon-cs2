@@ -25,6 +25,11 @@ loadConfig(async () => {
             label: "Women Teams"
         },
         {
+            name: "dotaTeams",
+            type: "checkbox",
+            label: "Dota Teams"
+        },
+        {
             name: "buttonAction",
             type: "action",
             values: [
@@ -90,7 +95,9 @@ onStart(async ({ CSGOGSI, DOTAGSI, config, close, onConfigChange, onAction }) =>
         const leftTeamName = newConfig?.leftTeam?.team?.name;
         const rightTeamName = newConfig?.rightTeam?.team?.name;
         const womenTeams = newConfig?.womenTeams
+        const dotaTeams = newConfig?.dotaTeams
         const body = {
+            dota_teams: dotaTeams,
             women_teams: womenTeams,
             left: {
                 name: leftTeamName,
@@ -111,12 +118,12 @@ onStart(async ({ CSGOGSI, DOTAGSI, config, close, onConfigChange, onAction }) =>
 
     const generateTable = () => {
         let content = 'Round   |   Player\n';
-        content    += '-----------------------\n';
+        content += '-----------------------\n';
 
-        for(const round of rounds){
+        for (const round of rounds) {
             content += `${`${round.round}`.padEnd(8)}| ${round.player}`;
 
-            if(round.steamid === targetPlayerSteamId) {
+            if (round.steamid === targetPlayerSteamId) {
                 content += ' (Very good player)';
             }
 
@@ -149,7 +156,7 @@ onStart(async ({ CSGOGSI, DOTAGSI, config, close, onConfigChange, onAction }) =>
         fetch('http://localhost:8085/round/start', { method: "POST" });
     });
 
-    CSGOGSI.on("warmupStart", ()=>{
+    CSGOGSI.on("warmupStart", () => {
         console.log("Warmup start");
     });
 
@@ -204,7 +211,7 @@ onStart(async ({ CSGOGSI, DOTAGSI, config, close, onConfigChange, onAction }) =>
 
     CSGOGSI.on("matchEnd", () => {
         fetch('http://localhost:8085/match/end', {
-             method: "POST",
+            method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 map: CSGOGSI.current?.map,
@@ -243,9 +250,94 @@ onStart(async ({ CSGOGSI, DOTAGSI, config, close, onConfigChange, onAction }) =>
                 }).catch(console.error)
             } else if (!isFlashed && wasFlashed) {
                 flashedPlayers[steamid] = false
+                const body = {
+                    name: player.name,
+                    steamid: player.steamid,
+                    timestamp: Date.now()
+                }
+                fetch("http://localhost:8085/player/unflashed", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                }).catch(console.error)
             }
         })
     });
+
+
+    DOTAGSI.on("kill", kill => {
+        if (!kill || !kill.victim) return
+
+        const body = {
+            name: kill.victim?.name || null,
+            steamid: kill.victim?.steamid,
+            timestamp: Date.now()
+        }
+        console.log("a player was killed");
+        fetch("http://localhost:8085/player/death", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        }).catch(console.error)
+    })
+
+    let lastRoshanKillTime = null
+    let lastRoshanAlive = null
+    const heroAliveStatus = {}
+
+    DOTAGSI.on("data", dota => {
+        const events = dota.events || []
+        events.forEach(event => {
+            if (event.event_type === "roshan_killed") {
+                if (event.game_time === lastRoshanKillTime) return
+                lastRoshanKillTime = event.game_time
+
+                const body = {
+                    team: event.killed_by_team,
+                    timestamp: Date.now()
+                }
+                fetch("http://localhost:8085/roshan/killed", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                }).catch(console.error)
+            }
+        })
+
+        const roshanAlive = dota.roshan?.alive
+        if (roshanAlive !== undefined && lastRoshanAlive !== null) {
+            if (roshanAlive && !lastRoshanAlive) {
+                lastRoshanKillTime = null
+                fetch("http://localhost:8085/roshan/respawn", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ timestamp: Date.now() })
+                }).catch(console.error)
+            }
+        }
+        if (roshanAlive !== undefined) {
+            lastRoshanAlive = roshanAlive
+        }
+
+        const players = dota.players || []
+        players.forEach(player => {
+            const alive = player.hero?.alive
+            const prevAlive = heroAliveStatus[player.steamid]
+            if (alive && prevAlive === false) {
+                const body = {
+                    name: player.name,
+                    steamid: player.steamid,
+                    timestamp: Date.now()
+                }
+                fetch("http://localhost:8085/player/respawn", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                }).catch(console.error)
+            }
+            heroAliveStatus[player.steamid] = alive
+        })
+    })
 });
 
 /**
